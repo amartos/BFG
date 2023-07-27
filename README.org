@@ -1,0 +1,325 @@
+#+author: Alexandre Martos
+#+options: toc:t
+
+* BrainFucking Gone - A simple BrainFuck interpreter
+
+** The BrainFuck language
+
+[[https://www.youtube.com/watch?v=gjm9irBs96U&t=8722s][Designed by Urban Müller]] in 1993, the language is very simple. /Too/
+simple some would say, but there is not much use for it besides
+educational/fun... Which is good enough.
+
+Basically, the language is described as follow:
+
+The "hardware" is composed of:
+- a memory of 30KB initialized at =0=
+- a data pointer
+- input/output streams
+
+Each byte can, as expected, handle 256 values, thus comprised between
+=-128= and =127= or =0= and =255=, depending on the considered sign.
+
+The syntax is composed of only 8 characters:
+
+| symbol | meaning                                                      | C equivalent        |
+|--------+--------------------------------------------------------------+---------------------|
+| >      | increment the data pointer                                   | ++ptr               |
+| <      | decrement the data pointer                                   | --ptr               |
+| +      | increment the data value                                     | ++*ptr              |
+| -      | decrement the data value                                     | --*ptr              |
+| .      | output the data value                                        | put(*ptr)           |
+| ,      | set the data value with input                                | *ptr = getc(stream) |
+| [      | jump to after the corresponding ] if the data value is 0     | while(*ptr) {...    |
+| ]      | jump to after the corresponding [ if the data value is not 0 | ...}                |
+
+*** Implementation
+
+The specificities of this interpreter are:
+- the memory limitation (total number of bytes) is not used by
+  default. An opt-in flag is available to activate it;
+- the bytes over/underflow are supported; the values are stored
+  unsigned;
+- the output value of the current byte is always the corresponding
+  ASCII character of the unsigned value;
+- all characters of a line after a =#= are ignored -- this helps for
+  using shebangs.
+
+** Installation
+
+*** Prerequisites
+
+The interpreter has =python3+= as its only prerequisite.
+
+If you're on a GNU/Linux distribution you probably have it already
+installed, otherwise check with your package manager for how to
+install it. For Debian-based distributions, it would be:
+
+#+begin_src bash
+  sudo apt install python3
+#+end_src
+
+For other OS, check Python's dedicated [[https://wiki.python.org/moin/BeginnersGuide/Download][wiki]] page.
+
+*** Download and install
+
+Downloading can be done using =git=, or through the repo's
+=code > download zip= button.
+
+You can then call the script using its full path, or put it in a
+directory that is in your =PATH=. One way is to clone the repo and
+symlink the script in your =bin= folder.
+
+For example (adapt the paths to your convenience):
+
+#+begin_src bash
+  mkdir -p ~/.local/opt
+  git clone https://github.com/amartos/BFG ~/.local/opt/BFG && \
+    ln -s ~/.local/opt/BFG/src/bfg.py ~/.local/bin/bfg && \
+    chmod +x ~/.local/opt/BFG/src/bfg.py
+#+end_src
+
+** Usage
+
+*** Help and documentation
+
+The documentation and other options is available through:
+
+#+begin_src bash :results output replace :exports both
+  bfg --help # or -h
+#+end_src
+
+Output:
+
+#+RESULTS:
+#+begin_example
+usage: bfg [-h] [-v] [-w] [-p] [-d] [-s] [-f FILE]
+
+BrainFucking Gone v0.1.0 - A simple BrainFuck interpreter.
+
+options:
+  -h, --help            show this help message and exit
+  -v, --version         display the version number and exit
+  -w, --license         display the license text and exit
+  -p, --persistent      make the memory persist between scripts execution
+                        (always True in the shell)
+  -d, --debug           print debugging info at each step (always True in the
+                        shell)
+  -s, --strict          use 'strict' mode: memory limited to 30000 bytes
+  -f FILE, --file FILE  Path of a program stored in a text file
+
+License MIT - Copyright 2023 Alexandre Martos <contact@amartos.fr>
+#+end_example
+
+*** Shell mode
+
+The interpreter has a rudimentary shell implemented. To use it, just
+launch the program without using the =-f/--file= (see the next section
+for its effects). The only option this mode react to is the
+=-s/--strict= flag.
+
+*** Interpreter mode
+
+Any text file using the BrainFuck syntax can be used as a BFG
+script. To execute a script, use the =-f/--file= option with the script
+path as argument:
+
+#+begin_example bash
+bfg -f path/to/my/script
+#+end_example
+
+You can also chain-execute multiple scripts by giving the option
+multiple times:
+
+#+begin_example bash
+bfg -f path/to/my/script -f path/to/my/other/script -f path/to/another/script # ...
+#+end_example
+
+You can also make a script executable directly with the interpreter by
+using a shebang at the top of the file, for example:
+
+#+begin_example bash
+#!/usr/bin/env -S bfg -f
+
+followed by BrainFuck code
+#+end_example
+
+In this example, =env='s =-S= option is necessary to pass the =-f= option.
+
+**** Debugging
+
+The =-d/--debug= flag reproduces the shell mode information printing at
+each instruction:
+
+: PC:   0 ('+'), PTR: *( 0) =   1
+
+The =PC= number is the instruction index in the program, and =PTR= is the
+pointer value (the index of the byte in the memory array). The value
+indicated at the end of each line is the stored byte value /after/
+execution of the line's instruction.
+
+Beware that this flag generally makes the output /very/ verbose in
+interpreter mode. The example below is truncated because of
+this. However, all the debugging output is sent to =stderr=, thus you
+can redirect the debugging output out of the way if you wish.
+
+In this mode, the outputs of all =.= instructions are cumulated to be
+printed only at the end of the program. This is the only difference
+with the shell mode in regards to debugging output.
+
+Example of the debugging output (see the [[More examples][examples]] section for the
+=tests/helloworld= code):
+
+#+begin_src bash :results output replace :exports both
+  bfg -d -f tests/helloworld 2>&1
+#+end_src
+
+This outputs (truncated for readability):
+
+#+RESULTS:
+#+begin_example
+PC:   0 ('+'), PTR: *( 0) =   1
+PC:   1 ('['), PTR: *( 0) =   1
+PC:   2 ('>'), PTR: *( 1) =   0
+PC:   3 ('>'), PTR: *( 2) =   0
+PC:   4 ('>'), PTR: *( 3) =   0
+PC:   5 ('-'), PTR: *( 3) = 255
+PC:   6 ('>'), PTR: *( 4) =   0
+[...]
+PC:  65 ('.'), PTR: *(18) = 100
+PC:  66 ('>'), PTR: *(19) = 108
+PC:  67 ('>'), PTR: *(20) =  32
+PC:  68 ('+'), PTR: *(20) =  33
+PC:  69 ('.'), PTR: *(20) =  33
+Done with: 70 instructions, 28743 steps, 24 bytes
+Output:
+hello, world!
+#+end_example
+
+**** Memory persistence
+:PROPERTIES:
+:header-args: :mkdirp yes :exports both :results output replace
+:END:
+
+The default behavior of the interpreter is to reset the interpreter's
+memory of the program between scripts execution. For example, this
+program calculates =2*3*10= (so 60, which is the code of the =<= ASCII
+character) and resets the pointer back to 0:
+
+#+begin_src bash :tangle tests/sixty
+  ++[->+++[->++++++++++[->+<]<]<]>>>.<<<
+#+end_src
+
+#+begin_src bash :exports both
+  bfg -f tests/sixty -f tests/sixty
+#+end_src
+
+The output is, as expected:
+
+#+RESULTS:
+: <<
+
+The =-p/--persistent= flag allows for memory persistence between
+scripts. The program then acts as if only one script was given, for
+which the code would be the concatenation of all the given scripts'
+code (in the order given on the command line).
+
+Now, the previous example becomes:
+
+#+begin_src bash :exports both
+  bfg -p -f tests/sixty -f tests/sixty
+#+end_src
+
+And outputs, as expected (120 being the code for =x=):
+
+#+RESULTS:
+: <x
+
+** More examples
+:PROPERTIES:
+:header-args: :tangle yes :tangle-mode (identity #o755) :mkdirp yes :results output replace :shebang "#!/usr/bin/env -S bfg -f"
+:END:
+
+Those are some BrainFuck programs gathered from the web, and their
+output using the interpreter.
+
+*** [[https://codegolf.stackexchange.com/a/163590][Hello World]], very short version
+
+#+name: HelloWorld
+#+begin_src bash :tangle tests/helloworld :exports both
+  +[>>>->-[>->----<<<]>>]>.---.>+..+++.>>.<.>>---.<<<.+++.------.<-.>>+.
+#+end_src
+
+Output:
+
+#+RESULTS: HelloWorld
+: hello, world!
+
+*** [[http://esoteric.sange.fi/brainfuck/bf-source/prog/fibonacci.txt][Fibonnaci]] suite (under 100)
+
+The original file is very instructive as heavily documented, but the
+comments use BrainFuck characters and examples. This messes up the
+script execution, however the author also gave the code without the
+comments (at the bottom of the file). This is the part that is used
+here.
+
+#+name: Fibonnaci
+#+begin_src bash :tangle tests/fibonnaci :exports both
+  +++++++++++
+  >+>>>>++++++++++++++++++++++++++++++++++++++++++++
+  >++++++++++++++++++++++++++++++++<<<<<<[>[>>>>>>+>
+  +<<<<<<<-]>>>>>>>[<<<<<<<+>>>>>>>-]<[>++++++++++[-
+  <-[>>+>+<<<-]>>>[<<<+>>>-]+<[>[-]<[-]]>[<<[>>>+<<<
+  -]>>[-]]<<]>>>[>>+>+<<<-]>>>[<<<+>>>-]+<[>[-]<[-]]
+  >[<<+>>[-]]<<<<<<<]>>>>>[+++++++++++++++++++++++++
+  +++++++++++++++++++++++.[-]]++++++++++<[->-<]>++++
+  ++++++++++++++++++++++++++++++++++++++++++++.[-]<<
+  <<<<<<<<<<[>>>+>+<<<<-]>>>>[<<<<+>>>>-]<-[>>.>.<<<
+  [-]]<<[>>+>+<<<-]>>>[<<<+>>>-]<<[<+>-]>[<+>-]<<<-]
+#+end_src
+
+Output:
+
+#+RESULTS: Fibonnaci
+: 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89
+
+*** [[https://en.wikipedia.org/wiki/Brainfuck#ROT13][ROT13]] cypher
+
+With comments this time, as those do /not/ contain BrainFuck
+characters.
+
+#+name: ROT13
+#+begin_src bash :tangle tests/rot13 :stdin HelloWorld :exports both
+  -,+[                         Read first character and start outer character reading loop
+      -[                       Skip forward if character is 0
+          >>++++[>++++++++<-]  Set up divisor (32) for division loop
+                                 (MEMORY LAYOUT: dividend copy remainder divisor quotient zero zero)
+          <+<-[                Set up dividend (x minus 1) and enter division loop
+              >+>+>-[>>>]      Increase copy and remainder / reduce divisor / Normal case: skip forward
+              <[[>+<-]>>+>]    Special case: move remainder back to divisor and increase quotient
+              <<<<<-           Decrement dividend
+          ]                    End division loop
+      ]>>>[-]+                 End skip loop; zero former divisor and reuse space for a flag
+      >--[-[<->+++[-]]]<[         Zero that flag unless quotient was 2 or 3; zero quotient; check flag
+          ++++++++++++<[       If flag then set up divisor (13) for second division loop
+                                 (MEMORY LAYOUT: zero copy dividend divisor remainder quotient zero zero)
+              >-[>+>>]         Reduce divisor; Normal case: increase remainder
+              >[+[<+>-]>+>>]   Special case: increase remainder / move it back to divisor / increase quotient
+              <<<<<-           Decrease dividend
+          ]                    End division loop
+          >>[<+>-]             Add remainder back to divisor to get a useful 13
+          >[                   Skip forward if quotient was 0
+              -[               Decrement quotient and skip forward if quotient was 1
+                  -<<[-]>>     Zero quotient and divisor if quotient was 2
+              ]<<[<<->>-]>>    Zero divisor and subtract 13 from copy if quotient was 1
+          ]<<[<<+>>-]          Zero divisor and add 13 to copy if quotient was 0
+      ]                        End outer skip loop (jump to here if ((character minus 1)/32) was not 2 or 3)
+      <[-]                     Clear remainder from first division if second division was skipped
+      <.[-]                    Output ROT13ed character from copy and clear it
+      <-,+                     Read next character
+  ]                            End character reading loop
+#+end_src
+
+Output:
+
+#+RESULTS: ROT13
+: uryyb, jbeyq!
